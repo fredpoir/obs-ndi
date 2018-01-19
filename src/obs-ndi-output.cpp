@@ -166,7 +166,6 @@ void* ndi_videosend_thread(void* data) {
 
         frame_duration = 1000000000ULL /
             (video_frame.frame_rate_N / video_frame.frame_rate_D);
-
         uint64_t next_frame = os_gettime_ns() + frame_duration;
 
         if (video_frame.p_data != nullptr) {
