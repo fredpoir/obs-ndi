@@ -31,6 +31,10 @@ static FORCE_INLINE uint32_t min_uint32(uint32_t a, uint32_t b)
     return a < b ? a : b;
 }
 
+static FORCE_INLINE int min_int(int a, int b) {
+    return a < b ? a : b;
+}
+
 void convert_nv12_to_uyvy(uint8_t* input[], uint32_t in_linesize[],
     uint32_t start_y, uint32_t end_y,
     uint8_t* output, uint32_t out_linesize)
@@ -127,7 +131,6 @@ struct ndi_output {
     os_event_t* video_send_stop_event;
 
     uint64_t last_audio_timestamp;
-    size_t current_video_buffering;
 };
 
 const char* ndi_output_getname(void* data) {
@@ -150,6 +153,8 @@ obs_properties_t* ndi_output_getproperties(void* data) {
 void* ndi_videosend_thread(void* data) {
     struct ndi_output* o = static_cast<ndi_output*>(data);
 
+    uint64_t frame_duration = 0;
+
     while (os_sem_wait(o->video_send_sem) == 0) {
         if (os_event_try(o->video_send_stop_event) == 0) {
             break;
@@ -159,8 +164,17 @@ void* ndi_videosend_thread(void* data) {
         circlebuf_pop_front(&o->video_frames,
             &video_frame, sizeof(NDIlib_video_frame_v2_t));
 
-        ndiLib->NDIlib_send_send_video_v2(o->ndi_sender, &video_frame);
-        bfree(video_frame.p_data);
+        frame_duration = 1000000000ULL /
+            (video_frame.frame_rate_N / video_frame.frame_rate_D);
+
+        uint64_t next_frame = os_gettime_ns() + frame_duration;
+
+        if (video_frame.p_data != nullptr) {
+            ndiLib->NDIlib_send_send_video_v2(o->ndi_sender, &video_frame);
+            bfree(video_frame.p_data);
+        }
+
+        os_sleepto_ns(next_frame);
     }
 
     // Flush frames in circlebuf before exiting
@@ -179,8 +193,6 @@ bool ndi_output_start(void* data) {
 
     ndiLib->NDIlib_send_destroy(o->ndi_sender);
     delete o->conv_buffer;
-
-    o->current_video_buffering = 0;
 
     obs_get_video_info(&o->video_info);
     obs_get_audio_info(&o->audio_info);
@@ -212,7 +224,7 @@ bool ndi_output_start(void* data) {
     NDIlib_send_create_t send_desc;
     send_desc.p_ndi_name = o->ndi_name;
     send_desc.p_groups = NULL;
-    send_desc.clock_video = true;
+    send_desc.clock_video = false;
     send_desc.clock_audio = false;
 
     o->ndi_sender = ndiLib->NDIlib_send_create(&send_desc);
@@ -243,7 +255,6 @@ void ndi_output_stop(void* data, uint64_t ts) {
     os_event_signal(o->video_send_stop_event);
     os_sem_post(o->video_send_sem);
     pthread_join(o->video_send_thread, NULL);
-    o->current_video_buffering = 0;
 
     ndiLib->NDIlib_send_destroy(o->ndi_sender);
     delete o->conv_buffer;
@@ -262,7 +273,6 @@ void* ndi_output_create(obs_data_t* settings, obs_output_t* output) {
     o->output = output;
     o->started = false;
     o->last_audio_timestamp = 0;
-    o->current_video_buffering = 0;
 
     circlebuf_init(&o->video_frames);
     os_sem_init(&o->video_send_sem, 0);
@@ -338,32 +348,31 @@ void ndi_output_rawvideo(void* data, struct video_data* frame) {
         (video_frame.frame_rate_N / video_frame.frame_rate_D);
     int64_t audio_buffering =
         (int64_t)frame->timestamp - (int64_t)o->last_audio_timestamp;
-    if (audio_buffering < 0) {
-        audio_buffering = 0;
-    }
-    int delay_frames_count = (int)audio_buffering / (int)frame_time;
-    //blog(LOG_INFO, "frame duration : %d ms ; current audio buffering: %d ms ; delay by %d frames",
-    //    (int)(frame_time / 1000000), (int)(audio_buffering / 1000000), delay_frames_count);
+    if (audio_buffering < 0) audio_buffering = 0;
 
-    int frames_to_add = delay_frames_count - (int)o->current_video_buffering;
-    if (frames_to_add < 0) {
-        frames_to_add = 0;
-    }
+    int required_delay_frames = (int)audio_buffering / (int)frame_time;
+    size_t current_delay_frames =
+        o->video_frames.size / sizeof(NDIlib_video_frame_v2_t);
+    int add_delay_frames = required_delay_frames - (int)current_delay_frames;
 
-    if (frames_to_add > 0) {
-        for (size_t i = 0; i < frames_to_add; i++) {
-            NDIlib_video_frame_v2_t filler_frame;
+    if (add_delay_frames < 0) {
+        size_t frames_to_pop = min_int(abs(add_delay_frames), (int)current_delay_frames);
+        for (size_t i = 0; i < frames_to_pop; i++) {
+            NDIlib_video_frame_v2_t popped_frame = { 0 };
+            circlebuf_pop_front(&o->video_frames, &popped_frame, sizeof(NDIlib_video_frame_v2_t));
+            os_sem_wait(o->video_send_sem);
+            bfree(popped_frame.p_data);
+        }
+    }
+    else if (add_delay_frames > 0) {
+        for (size_t i = 0; i < add_delay_frames; i++) {
+            NDIlib_video_frame_v2_t filler_frame = { 0 };
             memcpy(&filler_frame, &video_frame, sizeof(NDIlib_video_frame_v2_t));
-            filler_frame.p_data = (uint8_t*)bmalloc(video_bytes);
-            memcpy(filler_frame.p_data, video_frame.p_data, video_bytes);
+            filler_frame.p_data = nullptr;
 
             circlebuf_push_back(&o->video_frames, &filler_frame, sizeof(NDIlib_video_frame_v2_t));
             os_sem_post(o->video_send_sem);
         }
-        o->current_video_buffering += frames_to_add;
-        blog(LOG_INFO,
-            "added %d frames of video buffering. video buffering is now %d frames",
-            frames_to_add, o->current_video_buffering);
     }
 
     // Push to queue
