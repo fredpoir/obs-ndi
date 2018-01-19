@@ -354,7 +354,7 @@ void ndi_output_rawvideo(void* data, struct video_data* frame) {
         o->video_frames.size / sizeof(NDIlib_video_frame_v2_t);
     int add_delay_frames = required_delay_frames - (int)current_delay_frames;
 
-    if (add_delay_frames < 0) {
+    if (add_delay_frames < 1) {
         size_t frames_to_pop = min_int(abs(add_delay_frames), (int)current_delay_frames);
         for (size_t i = 0; i < frames_to_pop; i++) {
             NDIlib_video_frame_v2_t popped_frame = { 0 };
@@ -363,7 +363,7 @@ void ndi_output_rawvideo(void* data, struct video_data* frame) {
             bfree(popped_frame.p_data);
         }
     }
-    else if (add_delay_frames > 0) {
+    else if (add_delay_frames > 1) {
         for (size_t i = 0; i < add_delay_frames; i++) {
             NDIlib_video_frame_v2_t filler_frame = { 0 };
             memcpy(&filler_frame, &video_frame, sizeof(NDIlib_video_frame_v2_t));
