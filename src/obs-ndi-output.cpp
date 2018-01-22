@@ -131,6 +131,8 @@ struct ndi_output {
     os_event_t* video_send_stop_event;
 
     uint64_t last_audio_timestamp;
+
+    int dropped_frames;
 };
 
 const char* ndi_output_getname(void* data) {
@@ -148,6 +150,11 @@ obs_properties_t* ndi_output_getproperties(void* data) {
         obs_module_text("NDIPlugin.OutputProps.NDIName"), OBS_TEXT_DEFAULT);
 
     return props;
+}
+
+int ndi_output_dropped_frames(void* data) {
+    struct ndi_output* o = static_cast<ndi_output*>(data);
+    return o->dropped_frames;
 }
 
 void* ndi_videosend_thread(void* data) {
@@ -192,6 +199,9 @@ bool ndi_output_start(void* data) {
 
     ndiLib->NDIlib_send_destroy(o->ndi_sender);
     delete o->conv_buffer;
+
+    o->last_audio_timestamp = 0;
+    o->dropped_frames = 0;
 
     obs_get_video_info(&o->video_info);
     obs_get_audio_info(&o->audio_info);
@@ -272,6 +282,7 @@ void* ndi_output_create(obs_data_t* settings, obs_output_t* output) {
     o->output = output;
     o->started = false;
     o->last_audio_timestamp = 0;
+    o->dropped_frames = 0;
 
     circlebuf_init(&o->video_frames);
     os_sem_init(&o->video_send_sem, 0);
@@ -362,6 +373,7 @@ void ndi_output_rawvideo(void* data, struct video_data* frame) {
             os_sem_wait(o->video_send_sem);
             bfree(popped_frame.p_data);
         }
+        o->dropped_frames += abs(add_delay_frames);
     }
     else if (add_delay_frames > 1) {
         for (size_t i = 0; i < add_delay_frames; i++) {
