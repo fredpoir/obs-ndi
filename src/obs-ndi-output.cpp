@@ -44,6 +44,7 @@ struct ndi_output {
     uint8_t* conv_buffer;
     uint32_t conv_linesize;
 
+    bool is_direct_output;
     gs_texrender_t* texrender;
     gs_stagesurf_t* stagesurface;
 
@@ -53,7 +54,6 @@ struct ndi_output {
     uint32_t videoLinesize;
 
     video_t* video_output;
-
 };
 
 const char* ndi_output_getname(void* data) {
@@ -72,7 +72,13 @@ obs_properties_t* ndi_output_getproperties(void* data) {
 
     obs_properties_add_bool(props, "ndi_async_sending", "");
 
+    obs_properties_add_bool(props, "ndi_direct_render_output", "");
+
     return props;
+}
+
+void ndi_output_getdefaults(obs_data_t* settings) {
+    obs_data_set_default_bool(settings, "ndi_direct_render_output", false);
 }
 
 void ndi_output_rawvideo(void* data, struct video_data* frame);
@@ -184,7 +190,14 @@ bool ndi_output_start(void* data) {
 
     o->ndi_sender = ndiLib->NDIlib_send_create(&send_desc);
     if (o->ndi_sender) {
-        o->started = obs_output_begin_data_capture(o->output, 0);
+        if (o->is_direct_output) {
+            o->frame_format = NDIlib_FourCC_type_BGRA;
+            obs_add_main_render_callback(ndi_output_mainrender, o);
+        }
+        else {
+            o->started = obs_output_begin_data_capture(o->output, 0);
+        }
+
         if (o->started) {
             if (o->async_sending) {
                 blog(LOG_INFO, "asynchronous video sending enabled");
@@ -192,8 +205,6 @@ bool ndi_output_start(void* data) {
             else {
                 blog(LOG_INFO, "asynchronous video sending disabled");
             }
-        o->frame_format = NDIlib_FourCC_type_BGRA;
-        obs_add_main_render_callback(ndi_output_mainrender, o);
         }
     }
 
@@ -204,8 +215,13 @@ void ndi_output_stop(void* data, uint64_t ts) {
     struct ndi_output* o = (struct ndi_output*)data;
 
     o->started = false;
-    obs_output_end_data_capture(o->output);
-    obs_remove_main_render_callback(ndi_output_mainrender, o);
+
+    if (o->is_direct_output) {
+        obs_remove_main_render_callback(ndi_output_mainrender, o);
+    } else {
+        obs_output_end_data_capture(o->output);
+    }
+
     ndiLib->NDIlib_send_destroy(o->ndi_sender);
     delete o->conv_buffer;
     o->conv_buffer = nullptr;
@@ -215,6 +231,7 @@ void ndi_output_update(void* data, obs_data_t* settings) {
     struct ndi_output* o = (struct ndi_output*)data;
     o->ndi_name = obs_data_get_string(settings, "ndi_name");
     o->async_sending = obs_data_get_bool(settings, "ndi_async_sending");
+    o->is_direct_output = obs_data_get_bool(settings, "ndi_direct_render_output");
 }
 
 void* ndi_output_create(obs_data_t* settings, obs_output_t* output) {
@@ -396,6 +413,7 @@ struct obs_output_info create_ndi_output_info() {
     ndi_output_info.flags			= OBS_OUTPUT_AV;
     ndi_output_info.get_name		= ndi_output_getname;
     ndi_output_info.get_properties	= ndi_output_getproperties;
+    ndi_output_info.get_defaults	= ndi_output_getdefaults;
     ndi_output_info.create			= ndi_output_create;
     ndi_output_info.destroy			= ndi_output_destroy;
     ndi_output_info.update			= ndi_output_update;
