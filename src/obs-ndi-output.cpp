@@ -126,6 +126,7 @@ struct ndi_output {
     uint32_t conv_linesize;
 
     struct circlebuf video_frames;
+    pthread_mutex_t video_frames_mutex;
     pthread_t video_send_thread;
     os_sem_t* video_send_sem;
     os_event_t* video_send_stop_event;
@@ -168,8 +169,10 @@ void* ndi_videosend_thread(void* data) {
         }
 
         NDIlib_video_frame_v2_t video_frame = { 0 };
+        pthread_mutex_lock(&o->video_frames_mutex);
         circlebuf_pop_front(&o->video_frames,
             &video_frame, sizeof(NDIlib_video_frame_v2_t));
+        pthread_mutex_unlock(&o->video_frames_mutex);
 
         frame_duration = 1000000000ULL /
             (video_frame.frame_rate_N / video_frame.frame_rate_D);
@@ -184,12 +187,14 @@ void* ndi_videosend_thread(void* data) {
     }
 
     // Flush frames in circlebuf before exiting
+    pthread_mutex_lock(&o->video_frames_mutex);
     while (o->video_frames.size > 0) {
         NDIlib_video_frame_v2_t flushed_frame = { 0 };
         circlebuf_pop_front(&o->video_frames,
             &flushed_frame, sizeof(NDIlib_video_frame_v2_t));
         bfree(flushed_frame.p_data);
     }
+    pthread_mutex_unlock(&o->video_frames_mutex);
 
     return NULL;
 }
@@ -285,6 +290,7 @@ void* ndi_output_create(obs_data_t* settings, obs_output_t* output) {
     o->dropped_frames = 0;
 
     circlebuf_init(&o->video_frames);
+    pthread_mutex_init(&o->video_frames_mutex, NULL);
     os_sem_init(&o->video_send_sem, 0);
     os_event_init(&o->video_send_stop_event, OS_EVENT_TYPE_AUTO);
 
@@ -294,6 +300,7 @@ void* ndi_output_create(obs_data_t* settings, obs_output_t* output) {
 
 void ndi_output_destroy(void* data) {
     struct ndi_output* o = (struct ndi_output*)data;
+    pthread_mutex_destroy(&o->video_frames_mutex);
     bfree(o);
 }
 
@@ -365,11 +372,15 @@ void ndi_output_rawvideo(void* data, struct video_data* frame) {
         o->video_frames.size / sizeof(NDIlib_video_frame_v2_t);
     int add_delay_frames = required_delay_frames - (int)current_delay_frames;
 
-    if (add_delay_frames < 1) {
+    if (add_delay_frames < 0) {
         size_t frames_to_pop = min_int(abs(add_delay_frames), (int)current_delay_frames);
         for (size_t i = 0; i < frames_to_pop; i++) {
             NDIlib_video_frame_v2_t popped_frame = { 0 };
+
+            pthread_mutex_lock(&o->video_frames_mutex);
             circlebuf_pop_front(&o->video_frames, &popped_frame, sizeof(NDIlib_video_frame_v2_t));
+            pthread_mutex_unlock(&o->video_frames_mutex);
+
             os_sem_wait(o->video_send_sem);
             bfree(popped_frame.p_data);
         }
@@ -381,14 +392,19 @@ void ndi_output_rawvideo(void* data, struct video_data* frame) {
             memcpy(&filler_frame, &video_frame, sizeof(NDIlib_video_frame_v2_t));
             filler_frame.p_data = nullptr;
 
+            pthread_mutex_lock(&o->video_frames_mutex);
             circlebuf_push_back(&o->video_frames, &filler_frame, sizeof(NDIlib_video_frame_v2_t));
+            pthread_mutex_unlock(&o->video_frames_mutex);
+
             os_sem_post(o->video_send_sem);
         }
     }
 
     // Push to queue
+    pthread_mutex_lock(&o->video_frames_mutex);
     circlebuf_push_back(&o->video_frames,
         &video_frame, sizeof(NDIlib_video_frame_v2_t));
+    pthread_mutex_unlock(&o->video_frames_mutex);
     os_sem_post(o->video_send_sem);
 }
 
