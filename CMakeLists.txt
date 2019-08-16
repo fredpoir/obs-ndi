@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(obs-ndi)
+project(obs-ndi VERSION 4.6.0)
 
 set(CMAKE_PREFIX_PATH "${QTDIR}")
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -23,11 +23,15 @@ set(obs-ndi_SOURCES
 	src/obs-ndi-output.cpp
 	src/obs-ndi-filter.cpp
 	src/premultiplied-alpha-filter.cpp
+	src/main-output.cpp
+	src/preview-output.cpp
 	src/Config.cpp
 	src/forms/output-settings.cpp)
 
 set(obs-ndi_HEADERS
 	src/obs-ndi.h
+	src/main-output.h
+	src/preview-output.h
 	src/Config.h
 	src/forms/output-settings.h)
 
@@ -88,7 +92,7 @@ if(WIN32)
 			"${CMAKE_COMMAND}" -E copy
 				"$<TARGET_FILE:obs-ndi>"
 				"${RELEASE_DIR}/obs-plugins/${OBS_ARCH_NAME}")
-			
+
 		# Copy to obs-studio dev environment for immediate testing
 		COMMAND if $<CONFIG:Debug>==1 (
 			"${CMAKE_COMMAND}" -E copy

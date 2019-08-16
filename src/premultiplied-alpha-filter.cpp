@@ -1,19 +1,19 @@
 /*
-obs-ndi (NDI I/O in OBS Studio)
-Copyright (C) 2016-2017 Stéphane Lepin <stephane.lepin@gmail.com>
+obs-ndi
+Copyright (C) 2016-2018 Stéphane Lepin <steph  name of author
 
-This library is free software; you can redistribute it and/or
-modify it under the terms of the GNU Lesser General Public
-License as published by the Free Software Foundation; either
-version 2.1 of the License, or (at your option) any later version.
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
 
-This library is distributed in the hope that it will be useful,
+This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-Lesser General Public License for more details.
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-You should have received a copy of the GNU Lesser General Public
-License along with this library. If not, see <https://www.gnu.org/licenses/>
+You should have received a copy of the GNU General Public License
+along with this program; If not, see <https://www.gnu.org/licenses/>
 */
 
 #include <obs-module.h>
@@ -43,19 +43,20 @@ void alpha_filter_update(void* data, obs_data_t* settings) {
 
 void* alpha_filter_create(obs_data_t* settings, obs_source_t* source) {
 	struct alpha_filter* s =
-		static_cast<alpha_filter*>(bzalloc(sizeof(struct alpha_filter)));
+		(struct alpha_filter*)bzalloc(sizeof(struct alpha_filter));
 	s->context = source;
 	s->effect = obs_get_base_effect(OBS_EFFECT_PREMULTIPLIED_ALPHA);
 	return s;
 }
 
 void alpha_filter_destroy(void* data) {
-	UNUSED_PARAMETER(data);
+	struct alpha_filter* s = (struct alpha_filter*)data;
+	bfree(s);
 }
 
 void alpha_filter_videorender(void* data, gs_effect_t* effect) {
 	UNUSED_PARAMETER(effect);
-	struct alpha_filter* s = static_cast<alpha_filter*>(data);
+	struct alpha_filter* s = (struct alpha_filter*)data;
 
 	if (!obs_source_process_filter_begin(s->context, GS_RGBA,
 		OBS_ALLOW_DIRECT_RENDERING))

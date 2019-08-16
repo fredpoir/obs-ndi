@@ -4,7 +4,7 @@
 #include "idp\idp.iss"
 
 #define MyAppName "obs-ndi"
-#define MyAppVersion "git"
+#define MyAppVersion "4.6.0"
 #define MyAppPublisher "Stephane Lepin"
 #define MyAppURL "http://github.com/Palakis/obs-ndi"
 
@@ -22,7 +22,7 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 DefaultDirName={code:GetDirName}
 DefaultGroupName={#MyAppName}
-OutputBaseFilename=obs-ndi-{#MyAppVersion}-Windows-Installer
+OutputBaseFilename=obs-ndi-Windows-Installer
 Compression=lzma
 SolidCompression=yes
 LicenseFile=..\LICENSE

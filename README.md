@@ -1,10 +1,7 @@
 obs-ndi
 ==============
 
-Network A/V in OBS Studio with NewTek's NDI technology.  
-
-[![Gitter chat](https://badges.gitter.im/obs-ndi/obs-ndi.png)](https://gitter.im/obs-ndi/obs-ndi)
-
+Network A/V in OBS Studio with NewTek's NDI technology.
 
 ## Features
 - **NDI Source** : receive NDI video and audio in OBS
@@ -12,14 +9,15 @@ Network A/V in OBS Studio with NewTek's NDI technology.
 - **NDI Filter** (a.k.a NDI Dedicated Output) : transmit a single source or scene to NDI
 
 ## Downloads
-Binaries for Windows are available in the [Releases](https://github.com/Palakis/obs-ndi/releases) section. Linux and OS X versions are not yet available, as compatibility with these systems is under development.
+Binaries for Windows, macOS and Linux are available in the [Releases](https://github.com/Palakis/obs-ndi/releases) section.
 
 ## Compiling
 ### Prerequisites
-You'll need CMake, the NewTek NDI SDK 3.0 and a working development environment for OBS Studio installed on your computer.
+You'll need CMake and a working development environment for OBS Studio installed on your computer.
 
 ### Windows
 In cmake-gui, you'll have to set these CMake variables :
+- **QTDIR** (path) : location of the Qt environment suited for your compiler and architecture
 - **LIBOBS_INCLUDE_DIR** (path) : location of the libobs subfolder in the source code of OBS Studio
 - **LIBOBS_LIB** (filepath) : location of the obs.lib file
 - **OBS_FRONTEND_LIB** (filepath) : location of the obs-frontend-api.lib file
@@ -47,5 +45,6 @@ make -j4
 ```
 
 ### Automated Builds
-- Windows : [![Automated Build status for Windows](https://ci.appveyor.com/api/projects/status/github/Palakis/obs-ndi)](https://ci.appveyor.com/project/Palakis/obs-ndi/history)
-- Linux & OS X : [![Automated Build status for Linux & OS X](https://travis-ci.org/Palakis/obs-ndi.svg?branch=master)](https://travis-ci.org/Palakis/obs-ndi)
+- Windows: [![Automated Build status for Windows](https://ci.appveyor.com/api/projects/status/github/Palakis/obs-ndi)](https://ci.appveyor.com/project/Palakis/obs-ndi/history)
+- Linux: [![Automated Build status for Linux](https://travis-ci.org/Palakis/obs-ndi.svg?branch=master)](https://travis-ci.org/Palakis/obs-ndi)
+- macOS: [![Automated Build status for macOS](https://img.shields.io/azure-devops/build/Palakis/obs-ndi/Palakis.obs-ndi.svg)](https://dev.azure.com/Palakis/obs-ndi/_build)
